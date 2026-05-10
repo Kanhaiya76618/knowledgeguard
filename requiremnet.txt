@@ -1,0 +1,9 @@
+# KnowledgeGuard dependencies
+# Python 3.8+ required
+
+# No external packages required for core analyzer
+# (uses only Python standard library: subprocess, json, collections, sys)
+
+# Optional: for future web server version
+# flask>=3.0.0
+# fastapi>=0.110.0
