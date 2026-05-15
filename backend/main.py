@@ -2,7 +2,7 @@
 KnowledgeGuard Backend — FastAPI
 Run: uvicorn main:app --reload --port 8000
 """
-import subprocess, os, sys, json
+import subprocess, os, sys, json, asyncio
 from collections import defaultdict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,6 +55,9 @@ def run_bus_factor(repo_path):
     risky = []
     code_exts = {'.py','.js','.ts','.jsx','.tsx','.java','.go'}
     for fp, authors in file_authors.items():
+        full_path = os.path.join(repo_path, fp.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            continue
         if not any(fp.endswith(e) for e in code_exts):
             continue
         commits = get_commit_count(repo_path, fp)
@@ -136,7 +139,8 @@ async def ask(body: dict):
     valid, err = validate_repo(repo_path)
     if not valid:
         return {"error": f"Repo not loaded: {err}"}
-    return ask_bob(question, repo_path)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, ask_bob, question, repo_path)
 
 @app.post("/api/generate-doc")
 async def generate_doc(body: dict):
@@ -147,7 +151,8 @@ async def generate_doc(body: dict):
     valid, err = validate_repo(repo_path)
     if not valid:
         return {"error": err}
-    return generate_knowledge_doc(file_path, repo_path)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, generate_knowledge_doc, file_path, repo_path)
 
 @app.post("/api/ghost-developer")
 async def ghost(body: dict):
@@ -160,7 +165,8 @@ async def ghost(body: dict):
     valid, err = validate_repo(repo_path)
     if not valid:
         return {"error": err}
-    return ghost_developer(question, file_path, repo_path, author)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, ghost_developer, question, file_path, repo_path, author)
 
 @app.post("/api/explain-issue")
 async def explain_issue(body: dict):
@@ -172,4 +178,5 @@ async def explain_issue(body: dict):
     valid, err = validate_repo(repo_path)
     if not valid:
         return {"error": err}
-    return explain_arch_issue(title, files, repo_path)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, explain_arch_issue, title, files, repo_path)

@@ -35,9 +35,15 @@ export default function App() {
   const [docModal, setDocModal]       = useState(null);  // {file}
   const [issueModal, setIssueModal]   = useState(null);  // {title,files}
 
-  // Check Bob on mount
+  // Check Bob on mount and every 5 seconds
   useEffect(() => {
-    api.status().then(r => setBobConn(r?.bob_connected||false));
+    const check = async () => {
+      const r = await api.status();
+      setBobConn(r?.bob_connected || false);
+    };
+    check();
+    const interval = setInterval(check, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   async function scan() {
