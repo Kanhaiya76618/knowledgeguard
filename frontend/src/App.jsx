@@ -25,7 +25,7 @@ export default function App() {
   const [repoName, setRepoName]   = useState('—');
   const [scanning, setScanning]   = useState(false);
   const [status, setStatus]       = useState('Ready');
-  const [bobConn, setBobConn]     = useState(false);
+  const [bobConn, setBobConn]     = useState(null);
 
   // Data
   const [guardData, setGuardData]     = useState(null);
@@ -43,9 +43,18 @@ export default function App() {
 
   // Check Bob on mount and every 5 seconds
   useEffect(() => {
+    let failCount = 0;
     const check = async () => {
       const r = await api.status();
-      setBobConn(r?.bob_connected || false);
+      if (r?.bob_connected === true) {
+        failCount = 0;
+        setBobConn(true);
+      } else if (r?.bob_connected === false) {
+        failCount++;
+        if (failCount >= 2) {
+          setBobConn(false);
+        }
+      }
     };
     check();
     const interval = setInterval(check, 5000);
@@ -81,7 +90,7 @@ export default function App() {
 
     setScanning(false);
     setStatus('Complete');
-    api.status().then(r => setBobConn(r?.bob_connected||false));
+    api.status().then(r => setBobConn(r?.bob_connected === true ? true : false));
   }
 
   const guardBadge = guardData?.critical_count > 0 ? guardData.critical_count : null;
@@ -122,8 +131,8 @@ export default function App() {
           <div className="sf-label">Active Repo</div>
           <div className="sf-repo">{repoName}</div>
           <div className="sf-powered">
-            <div className={`sf-dot ${bobConn?'on':''}`}/>
-            <span>{bobConn ? 'IBM Bob · Connected' : 'IBM Bob · Offline'}</span>
+            <div className={`sf-dot ${bobConn===true?'on':''}`}/>
+            <span>{bobConn === true ? 'IBM Bob · Connected' : bobConn === null ? 'Connecting to IBM Bob...' : 'Bob CLI not connected'}</span>
           </div>
         </div>
       </aside>
@@ -152,11 +161,13 @@ export default function App() {
         </div>
 
         {/* Bob status bar */}
-        <div className={`bob-bar ${bobConn?'connected':'disconnected'}`}>
+        <div className={`bob-bar ${bobConn === true ? 'connected' : bobConn === false ? 'disconnected' : 'connecting'}`}>
           <div className="bob-dot"/>
-          <span>{bobConn
+          <span>{bobConn === true
             ? 'IBM Bob CLI connected — all AI features active'
-            : 'IBM Bob CLI not connected — analysis works, AI features need Bob CLI running'
+            : bobConn === false
+              ? 'IBM Bob CLI not connected — analysis features work, AI features need Bob CLI'
+              : 'Connecting to IBM Bob CLI...'
           }</span>
         </div>
 

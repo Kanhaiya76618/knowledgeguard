@@ -63,9 +63,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans)}
 .bob-bar{padding:5px 22px;font-size:10px;display:flex;align-items:center;gap:7px;flex-shrink:0;border-bottom:1px solid var(--border)}
 .bob-bar.connected{background:rgba(16,185,129,.06);color:var(--green)}
 .bob-bar.disconnected{background:rgba(245,158,11,.06);color:var(--amber)}
+.bob-bar.connecting{background:rgba(56,139,253,0.06);color:var(--blue);border-bottom:1px solid rgba(56,139,253,0.15)}
 .bob-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .connected .bob-dot{background:var(--green)}
 .disconnected .bob-dot{background:var(--amber)}
+.connecting .bob-dot{background:var(--blue);animation:blink .8s infinite}
 
 /* Hero */
 .hero{max-width:640px;margin:44px auto;text-align:center}

@@ -4,6 +4,7 @@ Run: uvicorn main:app --reload --port 8000
 """
 import subprocess, os, sys, asyncio
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,7 +14,15 @@ from dead_code import find_dead_code
 from bob_client import ask_bob, generate_knowledge_doc, ghost_developer, explain_arch_issue, is_bob_available
 from repo_manager import resolve_repo_path, is_github_url
 
-app = FastAPI(title="KnowledgeGuard API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_app):
+    # Pre-warm Bob connection on startup so first status check is instant
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, is_bob_available)
+    yield
+
+app = FastAPI(title="KnowledgeGuard API", version="1.0.0",
+              lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
