@@ -192,6 +192,100 @@ async def ghost(body: dict):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, ghost_developer, question, file_path, resolved['path'], author)
 
+@app.post("/api/onboarding")
+async def onboarding(body: dict):
+    role = body.get("role", "fullstack").strip()
+    repo_path = body.get("repo_path", "").strip()
+
+    resolved = resolve_repo_path(repo_path)
+    if resolved['error']:
+        return {"error": resolved['error']}
+
+    local_path = resolved['path']
+
+    # Build file list for context
+    file_list = []
+    skip = {'.git','__pycache__','node_modules',
+            '.venv','venv','dist','build'}
+    valid_ext = {
+        '.py','.js','.ts','.jsx','.tsx',
+        '.md','.json','.yaml','.yml','.toml'
+    }
+    for root, dirs, files in os.walk(local_path):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for f in files:
+            if any(f.endswith(e) for e in valid_ext):
+                rel = os.path.relpath(
+                    os.path.join(root, f), local_path
+                ).replace('\\','/')
+                file_list.append(rel)
+
+    files_str = '\n'.join(file_list[:60])
+
+    role_descriptions = {
+        'fullstack': 'Full Stack Developer working across frontend and backend',
+        'backend':   'Backend Developer focusing on APIs, databases, and server logic',
+        'frontend':  'Frontend Developer focusing on UI components and user experience',
+        'devops':    'DevOps Engineer focusing on deployment, CI/CD, and infrastructure',
+        'qa':        'QA Engineer focusing on testing, test coverage, and quality',
+        'aiml':      'AI/ML Engineer focusing on data pipelines, model integration, training scripts, inference code, and how ML components connect to the rest of the system',
+    }
+    role_desc = role_descriptions.get(
+        role,
+        'Full Stack Developer working across the entire codebase'
+    )
+
+    question = f"""You are creating an onboarding learning path for a new {role_desc}.
+
+Repository files available:
+{files_str}
+
+Create a structured onboarding plan using EXACTLY this format:
+
+## REPOSITORY OVERVIEW
+[2-3 sentences explaining what this codebase does and its purpose]
+
+## WEEK 1 — FOUNDATION
+- [ ] `filename` — [one sentence: why read this first]
+- [ ] `filename` — [one sentence: what you will learn]
+
+## WEEK 2 — CORE SYSTEMS
+- [ ] `filename` — [one sentence: why this matters]
+- [ ] `filename` — [one sentence: what you will learn]
+
+## WEEK 3 — ADVANCED TOPICS
+- [ ] `filename` — [one sentence: advanced concept here]
+
+## KEY CONCEPTS TO MASTER
+1. [concept name]: [one sentence explanation]
+2. [concept name]: [one sentence explanation]
+3. [concept name]: [one sentence explanation]
+
+## YOUR FIRST TASK
+[One concrete, achievable task a new developer can complete in their first week]
+
+## ARCHITECTURE NOTES
+[2-3 sentences about the architectural patterns and decisions in this codebase]
+
+Only include files that exist in the repository file list provided.
+Be specific and practical. Avoid generic advice."""
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, ask_bob, question, local_path
+    )
+
+    if result.get('answer'):
+        return {
+            "onboarding_path": result['answer'],
+            "role": role,
+            "total_files": len(file_list),
+            "error": None
+        }
+    return {
+        "error": result.get('error', 'Bob returned no output. Try again.')
+    }
+
 @app.post("/api/explain-issue")
 async def explain_issue(body: dict):
     title = body.get("title","").strip()

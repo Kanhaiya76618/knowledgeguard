@@ -6,6 +6,7 @@ import RepoQA from './views/RepoQA.jsx';
 import ArchSentinel from './views/ArchSentinel.jsx';
 import ArchMap from './views/ArchMap.jsx';
 import DeadCode from './views/DeadCode.jsx';
+import Onboarding from './views/Onboarding.jsx';
 import { GhostModal, DocModal, IssueModal } from './modals.jsx';
 
 const NAV = [
@@ -14,7 +15,8 @@ const NAV = [
   { id:'qa',       icon:'≡', label:'Repo Q&A',         section:'features' },
   { id:'sentinel', icon:'△', label:'Arch Sentinel',    section:'features', badgeKey:'sentinelBadge' },
   { id:'map',      icon:'⊞', label:'Architecture Map', section:'features' },
-  { id:'deadcode', icon:'∅', label:'Dead Code',        section:'features', badgeKey:'dcBadge' },
+  { id:'deadcode',   icon:'∅', label:'Dead Code',        section:'features', badgeKey:'dcBadge' },
+  { id:'onboarding', icon:'→', label:'Onboarding Path', section:'features' },
 ];
 
 export default function App() {
@@ -160,7 +162,7 @@ export default function App() {
 
         {/* Content */}
         <div className="content">
-          {view==='home'     && <Home/>}
+          {view==='home'     && <Home bobConn={bobConn}/>}
           {view==='guard'    && <KnowledgeGuard data={guardData} error={guardError}
                                   onGenerateDoc={(f,a)=>setDocModal({file:f,author:a})}
                                   onGhost={(f,a)=>setGhostModal({file:f,author:a})}/>}
@@ -169,6 +171,9 @@ export default function App() {
                                   onExplain={(t,f)=>setIssueModal({title:t,files:f})}/>}
           {view==='map'      && <ArchMap mapData={mapData}/>}
           {view==='deadcode' && <DeadCode data={dcData} error={dcError}/>}
+          {view==='onboarding' && (
+            <Onboarding repoPath={repoPath}/>
+          )}
         </div>
       </div>
 
