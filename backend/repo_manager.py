@@ -1,4 +1,5 @@
 import os
+import stat
 import shutil
 import subprocess
 import hashlib
@@ -18,13 +19,47 @@ def get_clone_path(url: str) -> str:
     return os.path.join(TEMP_DIR, f"{repo_name}_{url_hash}")
 
 
+def _force_rmtree(path: str) -> bool:
+    """Remove a directory tree on Windows, clearing read-only bits first."""
+    def _on_error(func, fpath, exc_info):
+        try:
+            os.chmod(fpath, stat.S_IWRITE)
+            func(fpath)
+        except Exception:
+            pass
+    try:
+        shutil.rmtree(path, onerror=_on_error)
+        return not os.path.exists(path)
+    except Exception:
+        return False
+
+
+def _has_source_files(clone_path: str) -> bool:
+    """Return True if the clone contains at least one non-.git source file."""
+    source_exts = {'.py', '.js', '.ts', '.jsx', '.tsx', '.rb', '.go',
+                   '.java', '.c', '.cpp', '.h', '.rs', '.md'}
+    for root, dirs, files in os.walk(clone_path):
+        dirs[:] = [d for d in dirs
+                   if d not in {'.git', '__pycache__', 'node_modules'}]
+        for f in files:
+            if any(f.endswith(ext) for ext in source_exts):
+                return True
+    return False
+
+
 def clone_repo(url: str) -> dict:
     clone_path = get_clone_path(url)
 
+    # Validate any existing clone: needs .git AND actual source files
+    git_dir = os.path.join(clone_path, '.git')
     if os.path.exists(clone_path):
-        if time.time() - os.stat(clone_path).st_mtime < 3600:
+        if os.path.exists(git_dir) and _has_source_files(clone_path):
             return {"path": clone_path, "error": None, "cached": True}
-        shutil.rmtree(clone_path, ignore_errors=True)
+        # Corrupt/partial/empty clone — force-remove it
+        removed = _force_rmtree(clone_path)
+        if not removed:
+            # If rmtree failed, clone to a timestamped sibling path
+            clone_path = clone_path + f"_{int(time.time())}"
 
     try:
         os.makedirs(TEMP_DIR, exist_ok=True)
@@ -39,7 +74,7 @@ def clone_repo(url: str) -> dict:
         error = result.stderr.strip() or "Clone failed"
         return {"path": None, "error": error, "cached": False}
     except subprocess.TimeoutExpired:
-        shutil.rmtree(clone_path, ignore_errors=True)
+        _force_rmtree(clone_path)
         return {"path": None, "error": "Repository clone timed out (120s)", "cached": False}
     except Exception as e:
         return {"path": None, "error": str(e), "cached": False}
