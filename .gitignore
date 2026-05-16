@@ -6,3 +6,9 @@ dist/
 .DS_Store
 *.egg-info/
 .venv/
+venv/
+*.log
+test_bob.py
+diagnose.py
+frontend/dist/
+*.pycache

@@ -6,17 +6,21 @@ async function post(endpoint, body) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60000)
+      signal: AbortSignal.timeout(180000)
     });
     return await res.json();
   } catch (e) {
-    return { error: e.name === 'TimeoutError' ? 'Request timed out' : `Cannot reach backend: ${e.message}` };
+    return {
+      error: e.name === 'TimeoutError'
+        ? 'Request timed out'
+        : `Cannot reach backend: ${e.message}`
+    };
   }
 }
 
 async function get(endpoint) {
   try {
-    const res = await fetch(`${API}${endpoint}`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${API}${endpoint}`, { signal: AbortSignal.timeout(15000) });
     return await res.json();
   } catch {
     return { error: 'Backend not running' };
@@ -32,4 +36,5 @@ export const api = {
   ghost:        (question, file_path, repo_path, author) =>
                                                   post('/api/ghost-developer',    { question, file_path, repo_path, author }),
   explainIssue: (title, files, repo_path)      => post('/api/explain-issue',      { title, files, repo_path }),
+  deadCode:     (repo_path)                    => post('/api/analyze/dead-code',  { repo_path }),
 };

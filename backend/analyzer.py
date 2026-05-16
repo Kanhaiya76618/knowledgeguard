@@ -1,5 +1,6 @@
 import subprocess
 import json
+import os
 import sys
 from collections import defaultdict
 
@@ -38,6 +39,9 @@ def analyze(repo_path, min_commits=10):
     risky_files = []
 
     for filepath, authors in file_authors.items():
+        full_path = os.path.join(repo_path, filepath.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            continue
         if not any(filepath.endswith(ext) for ext in ['.py', '.js', '.ts', '.java', '.go']):
             continue
         commit_count = get_commit_count(repo_path, filepath)

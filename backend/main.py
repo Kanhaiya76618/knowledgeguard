@@ -2,14 +2,16 @@
 KnowledgeGuard Backend — FastAPI
 Run: uvicorn main:app --reload --port 8000
 """
-import subprocess, os, sys, json
+import subprocess, os, sys, asyncio
 from collections import defaultdict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.append(os.path.dirname(__file__))
 from sentinel import analyze_architecture_debt
+from dead_code import find_dead_code
 from bob_client import ask_bob, generate_knowledge_doc, ghost_developer, explain_arch_issue, is_bob_available
+from repo_manager import resolve_repo_path, is_github_url
 
 app = FastAPI(title="KnowledgeGuard API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -39,7 +41,6 @@ def get_commit_count(repo_path, filepath):
     return len([l for l in result.stdout.strip().split('\n') if l])
 
 def get_git_authors_summary(repo_path):
-    """Get all contributors and their commit counts."""
     result = subprocess.run(
         ['git','log','--pretty=format:%ae'],
         cwd=repo_path, capture_output=True, text=True
@@ -55,6 +56,9 @@ def run_bus_factor(repo_path):
     risky = []
     code_exts = {'.py','.js','.ts','.jsx','.tsx','.java','.go'}
     for fp, authors in file_authors.items():
+        full_path = os.path.join(repo_path, fp.replace('/', os.sep))
+        if not os.path.exists(full_path):
+            continue
         if not any(fp.endswith(e) for e in code_exts):
             continue
         commits = get_commit_count(repo_path, fp)
@@ -82,18 +86,6 @@ def run_bus_factor(repo_path):
         'contributors': get_git_authors_summary(repo_path)
     }
 
-def validate_repo(repo_path):
-    if not repo_path:
-        return False, "Repository path is required"
-    if not os.path.exists(repo_path):
-        return False, f"Path does not exist: {repo_path}"
-    if not os.path.isdir(repo_path):
-        return False, f"Path is not a directory: {repo_path}"
-    git_dir = os.path.join(repo_path, '.git')
-    if not os.path.exists(git_dir):
-        return False, "Not a git repository (no .git folder found)"
-    return True, None
-
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
@@ -105,71 +97,110 @@ async def status():
         "features": ["bus-factor","sentinel","qa","map","ghost-developer"]
     }
 
+@app.post("/api/validate-repo")
+async def validate_repo_endpoint(body: dict):
+    repo_input = body.get("repo_path", "").strip()
+    if not repo_input:
+        return {"valid": False, "error": "No path provided"}
+    if is_github_url(repo_input):
+        return {
+            "valid": True,
+            "is_url": True,
+            "message": "GitHub URL detected — will clone automatically"
+        }
+    if not os.path.exists(repo_input):
+        return {"valid": False, "error": "Path not found", "is_url": False}
+    return {"valid": True, "is_url": False, "message": "Local path ready"}
+
 @app.post("/api/analyze/bus-factor")
 async def bus_factor(body: dict):
-    repo_path = body.get("repo_path","").strip()
-    valid, err = validate_repo(repo_path)
-    if not valid:
-        return {"error": err}
-    try:
-        return run_bus_factor(repo_path)
-    except Exception as e:
-        return {"error": str(e)}
+    repo_input = body.get("repo_path", "").strip()
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    repo_path = resolved['path']
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, run_bus_factor, repo_path)
+    if resolved.get('is_url'):
+        result['source'] = 'github'
+        result['cached'] = resolved.get('cached', False)
+    return result
 
 @app.post("/api/analyze/sentinel")
 async def sentinel(body: dict):
-    repo_path = body.get("repo_path","").strip()
-    valid, err = validate_repo(repo_path)
-    if not valid:
-        return {"error": err}
-    try:
-        return analyze_architecture_debt(repo_path)
-    except Exception as e:
-        return {"error": str(e)}
+    repo_input = body.get("repo_path", "").strip()
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    repo_path = resolved['path']
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, analyze_architecture_debt, repo_path)
+    if resolved.get('is_url'):
+        result['source'] = 'github'
+        result['cached'] = resolved.get('cached', False)
+    return result
+
+@app.post("/api/analyze/dead-code")
+async def dead_code_endpoint(body: dict):
+    repo_input = body.get("repo_path", "").strip()
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    repo_path = resolved['path']
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, find_dead_code, repo_path)
+    if resolved.get('is_url'):
+        result['source'] = 'github'
+        result['cached'] = resolved.get('cached', False)
+    return result
 
 @app.post("/api/ask")
 async def ask(body: dict):
     question = body.get("question","").strip()
-    repo_path = body.get("repo_path","").strip()
+    repo_input = body.get("repo_path","").strip()
     if not question:
         return {"error": "Question is required"}
-    valid, err = validate_repo(repo_path)
-    if not valid:
-        return {"error": f"Repo not loaded: {err}"}
-    return ask_bob(question, repo_path)
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": f"Repo not loaded: {resolved['error']}"}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, ask_bob, question, resolved['path'])
 
 @app.post("/api/generate-doc")
 async def generate_doc(body: dict):
     file_path = body.get("file_path","").strip()
-    repo_path = body.get("repo_path","").strip()
+    repo_input = body.get("repo_path","").strip()
     if not file_path:
         return {"error": "File path is required"}
-    valid, err = validate_repo(repo_path)
-    if not valid:
-        return {"error": err}
-    return generate_knowledge_doc(file_path, repo_path)
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, generate_knowledge_doc, file_path, resolved['path'])
 
 @app.post("/api/ghost-developer")
 async def ghost(body: dict):
     question = body.get("question","").strip()
     file_path = body.get("file_path","").strip()
-    repo_path = body.get("repo_path","").strip()
+    repo_input = body.get("repo_path","").strip()
     author = body.get("author","unknown author")
     if not question or not file_path:
         return {"error": "Question and file_path are required"}
-    valid, err = validate_repo(repo_path)
-    if not valid:
-        return {"error": err}
-    return ghost_developer(question, file_path, repo_path, author)
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, ghost_developer, question, file_path, resolved['path'], author)
 
 @app.post("/api/explain-issue")
 async def explain_issue(body: dict):
     title = body.get("title","").strip()
     files = body.get("files",[])
-    repo_path = body.get("repo_path","").strip()
+    repo_input = body.get("repo_path","").strip()
     if not title:
         return {"error": "Issue title is required"}
-    valid, err = validate_repo(repo_path)
-    if not valid:
-        return {"error": err}
-    return explain_arch_issue(title, files, repo_path)
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, explain_arch_issue, title, files, resolved['path'])

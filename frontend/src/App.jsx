@@ -5,14 +5,16 @@ import KnowledgeGuard from './views/KnowledgeGuard.jsx';
 import RepoQA from './views/RepoQA.jsx';
 import ArchSentinel from './views/ArchSentinel.jsx';
 import ArchMap from './views/ArchMap.jsx';
+import DeadCode from './views/DeadCode.jsx';
 import { GhostModal, DocModal, IssueModal } from './modals.jsx';
 
 const NAV = [
-  { id:'home',     icon:'⬡', label:'Overview',         section:'platform' },
-  { id:'guard',    icon:'🛡️', label:'Knowledge Guard',  section:'features', badgeKey:'guardBadge' },
-  { id:'qa',       icon:'💬', label:'Repo Q&A',         section:'features' },
-  { id:'sentinel', icon:'🏛️', label:'Arch Sentinel',    section:'features', badgeKey:'sentinelBadge' },
-  { id:'map',      icon:'🗺️', label:'Architecture Map', section:'features' },
+  { id:'home',     icon:'◆', label:'Overview',         section:'platform' },
+  { id:'guard',    icon:'⬡', label:'Knowledge Guard',  section:'features', badgeKey:'guardBadge' },
+  { id:'qa',       icon:'≡', label:'Repo Q&A',         section:'features' },
+  { id:'sentinel', icon:'△', label:'Arch Sentinel',    section:'features', badgeKey:'sentinelBadge' },
+  { id:'map',      icon:'⊞', label:'Architecture Map', section:'features' },
+  { id:'deadcode', icon:'∅', label:'Dead Code',        section:'features', badgeKey:'dcBadge' },
 ];
 
 export default function App() {
@@ -29,15 +31,23 @@ export default function App() {
   const [sentData, setSentData]       = useState(null);
   const [sentError, setSentError]     = useState(null);
   const [mapData, setMapData]         = useState(null);
+  const [dcData, setDcData]           = useState(null);
+  const [dcError, setDcError]         = useState(null);
 
   // Modals
   const [ghostModal, setGhostModal]   = useState(null); // {file,author}
   const [docModal, setDocModal]       = useState(null);  // {file}
   const [issueModal, setIssueModal]   = useState(null);  // {title,files}
 
-  // Check Bob on mount
+  // Check Bob on mount and every 5 seconds
   useEffect(() => {
-    api.status().then(r => setBobConn(r?.bob_connected||false));
+    const check = async () => {
+      const r = await api.status();
+      setBobConn(r?.bob_connected || false);
+    };
+    check();
+    const interval = setInterval(check, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   async function scan() {
@@ -47,11 +57,12 @@ export default function App() {
     setRepoName(name);
     setScanning(true);
     setStatus('Scanning…');
-    setGuardError(null); setSentError(null);
+    setGuardError(null); setSentError(null); setDcError(null);
 
-    const [busRes, sentRes] = await Promise.all([
+    const [busRes, sentRes, dcRes] = await Promise.all([
       api.busFactor(path),
       api.sentinel(path),
+      api.deadCode(path),
     ]);
 
     if (busRes?.error) setGuardError(busRes.error);
@@ -63,6 +74,9 @@ export default function App() {
       if (sentRes?.map) setMapData(sentRes.map);
     }
 
+    if (dcRes?.error) setDcError(dcRes.error);
+    else setDcData(dcRes);
+
     setScanning(false);
     setStatus('Complete');
     api.status().then(r => setBobConn(r?.bob_connected||false));
@@ -70,13 +84,14 @@ export default function App() {
 
   const guardBadge = guardData?.critical_count > 0 ? guardData.critical_count : null;
   const sentBadge  = sentData?.total_issues > 0     ? sentData.total_issues    : null;
+  const dcBadge    = dcData?.total_issues > 0        ? dcData.total_issues      : null;
 
   return (
     <div className="layout">
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="logo">
-          <div className="logo-mark">🛡️</div>
+          <div className="logo-mark">KG</div>
           <div>
             <div className="logo-name">KnowledgeGuard</div>
             <div className="logo-tag">Codebase Intelligence</div>
@@ -88,7 +103,7 @@ export default function App() {
             <div className="nav-sec" key={section}>
               <div className="nav-sec-label">{section}</div>
               {NAV.filter(n=>n.section===section).map(n => {
-                const badge = n.badgeKey==='guardBadge'?guardBadge:n.badgeKey==='sentinelBadge'?sentBadge:null;
+                const badge = n.badgeKey==='guardBadge'?guardBadge:n.badgeKey==='sentinelBadge'?sentBadge:n.badgeKey==='dcBadge'?dcBadge:null;
                 return (
                   <button key={n.id} className={`nav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}>
                     <span className="nav-icon">{n.icon}</span>
@@ -106,7 +121,7 @@ export default function App() {
           <div className="sf-repo">{repoName}</div>
           <div className="sf-powered">
             <div className={`sf-dot ${bobConn?'on':''}`}/>
-            <span>{bobConn ? 'IBM Bob connected' : 'Bob CLI not connected'}</span>
+            <span>{bobConn ? 'IBM Bob · Connected' : 'IBM Bob · Offline'}</span>
           </div>
         </div>
       </aside>
@@ -117,16 +132,16 @@ export default function App() {
         <div className="topbar">
           <span className="tb-label">REPO ›</span>
           <div className="repo-field">
-            <span className="repo-field-icon">📁</span>
+            <span className="repo-field-icon">▸</span>
             <input
               value={repoPath}
               onChange={e=>setRepoPath(e.target.value)}
               onKeyDown={e=>e.key==='Enter'&&scan()}
-              placeholder="Paste your repository path here…"
+              placeholder="Enter local path or GitHub URL…"
             />
           </div>
           <button className="scan-btn" onClick={scan} disabled={scanning}>
-            {scanning ? '⏳ Scanning…' : '⬡ Scan Repo'}
+            {scanning ? 'Scanning…' : 'Scan Repo'}
           </button>
           <div className="tb-status">
             <div className={`tb-led ${scanning?'scanning':status==='Complete'?'on':''}`}/>
@@ -153,6 +168,7 @@ export default function App() {
           {view==='sentinel' && <ArchSentinel data={sentData} error={sentError}
                                   onExplain={(t,f)=>setIssueModal({title:t,files:f})}/>}
           {view==='map'      && <ArchMap mapData={mapData}/>}
+          {view==='deadcode' && <DeadCode data={dcData} error={dcError}/>}
         </div>
       </div>
 
