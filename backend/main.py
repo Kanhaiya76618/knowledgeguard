@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.append(os.path.dirname(__file__))
 from sentinel import analyze_architecture_debt
+from dead_code import find_dead_code
 from bob_client import ask_bob, generate_knowledge_doc, ghost_developer, explain_arch_issue, is_bob_available
 from repo_manager import resolve_repo_path, is_github_url
 
@@ -134,6 +135,20 @@ async def sentinel(body: dict):
     repo_path = resolved['path']
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, analyze_architecture_debt, repo_path)
+    if resolved.get('is_url'):
+        result['source'] = 'github'
+        result['cached'] = resolved.get('cached', False)
+    return result
+
+@app.post("/api/analyze/dead-code")
+async def dead_code_endpoint(body: dict):
+    repo_input = body.get("repo_path", "").strip()
+    resolved = resolve_repo_path(repo_input)
+    if resolved['error']:
+        return {"error": resolved['error']}
+    repo_path = resolved['path']
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, find_dead_code, repo_path)
     if resolved.get('is_url'):
         result['source'] = 'github'
         result['cached'] = resolved.get('cached', False)

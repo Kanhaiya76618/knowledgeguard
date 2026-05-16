@@ -10,3 +10,5 @@ venv/
 *.log
 test_bob.py
 diagnose.py
+frontend/dist/
+*.pycache

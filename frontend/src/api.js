@@ -36,4 +36,5 @@ export const api = {
   ghost:        (question, file_path, repo_path, author) =>
                                                   post('/api/ghost-developer',    { question, file_path, repo_path, author }),
   explainIssue: (title, files, repo_path)      => post('/api/explain-issue',      { title, files, repo_path }),
+  deadCode:     (repo_path)                    => post('/api/analyze/dead-code',  { repo_path }),
 };

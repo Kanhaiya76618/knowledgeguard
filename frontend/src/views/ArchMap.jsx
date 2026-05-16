@@ -68,15 +68,6 @@ export default function ArchMap({ mapData }) {
   const [search,   setSearch]   = useState('');
   const [dims,     setDims]     = useState({W:900,H:500});
 
-  const stars = useMemo(()=>Array.from({length:240},(_,i)=>({
-    id:i,
-    cx:Math.random()*100, cy:Math.random()*100,
-    r:Math.random()*1.8+0.3,
-    op:Math.random()*0.8+0.15,
-    dur:(Math.random()*4+2).toFixed(1),
-    delay:(Math.random()*6).toFixed(1),
-  })),[]);
-
   useEffect(()=>{
     if (!mapData?.nodes?.length||!wrapRef.current) return;
     const W=wrapRef.current.clientWidth||900, H=500;
@@ -139,7 +130,7 @@ export default function ArchMap({ mapData }) {
     <div className="fade-in">
       <div className="ph"><div><div className="ph-title">🗺️ Architecture Map</div><div className="ph-sub">Space-themed interactive dependency graph</div></div></div>
       <div className="map-wrap">
-        <div style={{height:500,display:'flex',alignItems:'center',justifyContent:'center',background:'#07090f'}}>
+        <div style={{height:500,display:'flex',alignItems:'center',justifyContent:'center',background:'#0d1117'}}>
           <Empty icon="🗺️" text="Scan a repository to generate the architecture map"/>
         </div>
       </div>
@@ -152,7 +143,6 @@ export default function ArchMap({ mapData }) {
   return (
     <div className="fade-in">
       <style>{`
-        @keyframes twinkle{0%,100%{opacity:var(--sop)}50%{opacity:calc(var(--sop)*0.12)}}
         @keyframes pulse-ring{0%{r:var(--pr);opacity:.9}100%{r:calc(var(--pr)*2.8);opacity:0}}
         @keyframes orbit-ring{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes flow{from{stroke-dashoffset:0}to{stroke-dashoffset:-20}}
@@ -203,7 +193,7 @@ export default function ArchMap({ mapData }) {
         <div ref={wrapRef} className="space-canvas"
           style={{
             height:500, position:'relative', overflow:'hidden',
-            background:'radial-gradient(ellipse at 18% 40%,rgba(124,58,237,.09) 0%,transparent 52%), radial-gradient(ellipse at 80% 25%,rgba(0,180,216,.08) 0%,transparent 48%), radial-gradient(ellipse at 55% 88%,rgba(55,48,163,.08) 0%,transparent 42%), #07090f',
+            background:'#0d1117',
           }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
@@ -229,13 +219,6 @@ export default function ArchMap({ mapData }) {
                 <path d="M0,0 L5,2.5 L0,5" fill="none" stroke="#253347" strokeWidth="1"/>
               </marker>
             </defs>
-
-            {/* Stars */}
-            {stars.map(s=>(
-              <circle key={s.id} cx={`${s.cx}%`} cy={`${s.cy}%`} r={s.r} fill="white"
-                style={{'--sop':s.op, opacity:s.op,
-                  animation:`twinkle ${s.dur}s ${s.delay}s ease-in-out infinite`}}/>
-            ))}
 
             {/* Graph */}
             <g transform={transform}>
@@ -315,14 +298,23 @@ export default function ArchMap({ mapData }) {
                     {/* Glint */}
                     <circle cx={n.x-r*.28} cy={n.y-r*.28} r={r*.22} fill="white" opacity=".2"/>
                     {/* Label */}
-                    {showLbl&&(
-                      <text x={n.x} y={n.y+r+12} textAnchor="middle"
-                        fontSize={n.degree>=4?10:9}
-                        fill={n.degree>=4?'#94a3b8':'#475569'}
-                        fontFamily="IBM Plex Mono,monospace">
-                        {(n.label||'').length>14?(n.label||'').slice(0,12)+'…':n.label}
-                      </text>
-                    )}
+                    {showLbl&&(()=>{
+                      const txt=(n.label||'').length>14?(n.label||'').slice(0,12)+'…':(n.label||'');
+                      const fSize=n.degree>=4?10:9;
+                      const approxW=txt.length*fSize*0.62+8;
+                      return (
+                        <g>
+                          <rect x={n.x-approxW/2} y={n.y+r+2} width={approxW} height={fSize+5}
+                            rx={3} fill="rgba(13,17,23,0.88)"/>
+                          <text x={n.x} y={n.y+r+11} textAnchor="middle"
+                            fontSize={fSize}
+                            fill={n.degree>=4?'#c9d1d9':'#8b949e'}
+                            fontFamily="IBM Plex Mono,monospace">
+                            {txt}
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </g>
                 );
               })}
