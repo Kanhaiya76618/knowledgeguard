@@ -203,14 +203,12 @@ async def onboarding(body: dict):
 
     local_path = resolved['path']
 
-    # Build file list for context
+    # Build a SHORT file list — only top 20 most important files
     file_list = []
     skip = {'.git','__pycache__','node_modules',
             '.venv','venv','dist','build'}
-    valid_ext = {
-        '.py','.js','.ts','.jsx','.tsx',
-        '.md','.json','.yaml','.yml','.toml'
-    }
+    valid_ext = {'.py','.js','.ts','.jsx','.tsx','.md'}
+
     for root, dirs, files in os.walk(local_path):
         dirs[:] = [d for d in dirs if d not in skip]
         for f in files:
@@ -219,56 +217,46 @@ async def onboarding(body: dict):
                     os.path.join(root, f), local_path
                 ).replace('\\','/')
                 file_list.append(rel)
+        if len(file_list) >= 20:
+            break
 
-    files_str = '\n'.join(file_list[:60])
+    files_str = '\n'.join(file_list[:20])
 
-    role_descriptions = {
-        'fullstack': 'Full Stack Developer working across frontend and backend',
-        'backend':   'Backend Developer focusing on APIs, databases, and server logic',
-        'frontend':  'Frontend Developer focusing on UI components and user experience',
-        'devops':    'DevOps Engineer focusing on deployment, CI/CD, and infrastructure',
-        'qa':        'QA Engineer focusing on testing, test coverage, and quality',
-        'aiml':      'AI/ML Engineer focusing on data pipelines, model integration, training scripts, inference code, and how ML components connect to the rest of the system',
+    role_map = {
+        'fullstack': 'Full Stack Developer',
+        'backend':   'Backend Developer',
+        'frontend':  'Frontend Developer',
+        'devops':    'DevOps Engineer',
+        'qa':        'QA Engineer',
+        'aiml':      'AI/ML Engineer',
     }
-    role_desc = role_descriptions.get(
-        role,
-        'Full Stack Developer working across the entire codebase'
-    )
+    role_label = role_map.get(role, 'Developer')
 
-    question = f"""You are creating an onboarding learning path for a new {role_desc}.
+    # SHORT focused prompt — phrased as Q&A to avoid Bob creating files
+    question = f"""A new {role_label} is joining this project. Answer with the onboarding info below. Do not create any files — just reply with the text.
 
-Repository files available:
+Repo files:
 {files_str}
 
-Create a structured onboarding plan using EXACTLY this format:
+Reply in this exact format, one sentence per item:
 
-## REPOSITORY OVERVIEW
-[2-3 sentences explaining what this codebase does and its purpose]
+OVERVIEW: [what this codebase does in 2 sentences]
 
-## WEEK 1 — FOUNDATION
-- [ ] `filename` — [one sentence: why read this first]
-- [ ] `filename` — [one sentence: what you will learn]
+START HERE:
+1. [filename] - [why read this first]
+2. [filename] - [what you learn]
+3. [filename] - [what you learn]
+4. [filename] - [what you learn]
+5. [filename] - [what you learn]
 
-## WEEK 2 — CORE SYSTEMS
-- [ ] `filename` — [one sentence: why this matters]
-- [ ] `filename` — [one sentence: what you will learn]
+KEY CONCEPTS:
+- [concept]: [one line]
+- [concept]: [one line]
+- [concept]: [one line]
 
-## WEEK 3 — ADVANCED TOPICS
-- [ ] `filename` — [one sentence: advanced concept here]
+FIRST TASK: [one concrete task for week 1]
 
-## KEY CONCEPTS TO MASTER
-1. [concept name]: [one sentence explanation]
-2. [concept name]: [one sentence explanation]
-3. [concept name]: [one sentence explanation]
-
-## YOUR FIRST TASK
-[One concrete, achievable task a new developer can complete in their first week]
-
-## ARCHITECTURE NOTES
-[2-3 sentences about the architectural patterns and decisions in this codebase]
-
-Only include files that exist in the repository file list provided.
-Be specific and practical. Avoid generic advice."""
+Use only files from the list above. Keep answers brief."""
 
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(

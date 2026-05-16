@@ -39,7 +39,7 @@ export default function Onboarding({ repoPath }) {
 
     const interval = setInterval(() => {
       setMsgIdx(i => (i + 1) % LOADING_MSGS.length);
-    }, 7000);
+    }, 5000);
 
     const res = await api.onboarding(role, repoPath);
     clearInterval(interval);
